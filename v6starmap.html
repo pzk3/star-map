@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LOCAL STAR MAP — Sol Neighbourhood</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#000008;--panel-bg:rgba(8,8,14,0.93);
+    --border:rgba(255,255,255,0.13);--border-strong:rgba(255,255,255,0.24);
+    --accent:#fff;--accent2:#a0c4ff;
+    --text:#f0f0f2;--text-dim:rgba(255,255,255,0.38);--text-mid:rgba(255,255,255,0.68);
+    --sans:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter','Helvetica Neue',sans-serif;
+  }
+  html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);overflow:hidden;cursor:crosshair}
+  #canvas{position:fixed;inset:0;z-index:0}
+
+  /* LOADER */
+  #loader{position:fixed;inset:0;z-index:1000;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;transition:opacity 0.6s}
+  #loader h1{font-size:clamp(1.1rem,2.8vw,1.7rem);font-weight:300;letter-spacing:0.16em;color:#fff;text-shadow:0 0 60px rgba(160,200,255,0.35)}
+  #loader-sub{font-size:0.7rem;color:var(--text-dim);letter-spacing:0.2em;text-transform:uppercase;font-weight:400}
+  #progress-wrap{width:min(360px,80vw);height:1px;background:rgba(255,255,255,0.07);overflow:hidden}
+  #progress-bar{height:100%;width:0%;background:rgba(255,255,255,0.65);transition:width 0.15s}
+  #loader-count{font-size:0.65rem;color:var(--text-dim);letter-spacing:0.08em;text-align:center;max-width:80vw}
+  #loader-error{font-size:0.65rem;color:#ff9977;letter-spacing:0.04em;text-align:center;max-width:80vw;line-height:1.7;display:none;font-weight:400}
+
+  /* TOPBAR */
+  #topbar{position:fixed;top:0;left:0;right:0;z-index:100;height:50px;background:rgba(0,0,6,0.85);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);display:flex;align-items:center;padding:0 20px;gap:16px;border-bottom:1px solid var(--border)}
+  #topbar h1{font-size:0.72rem;font-weight:500;letter-spacing:0.14em;color:rgba(255,255,255,0.88);white-space:nowrap;text-transform:uppercase}
+  .tb-sep{width:1px;height:17px;background:var(--border);flex-shrink:0}
+  #search-wrap{position:relative;display:flex;align-items:center}
+  #search{background:rgba(255,255,255,0.06);border:1px solid var(--border);color:var(--text);font-family:var(--sans);font-size:0.72rem;font-weight:400;padding:6px 12px 6px 30px;width:200px;border-radius:7px;outline:none;transition:border-color 0.2s,background 0.2s}
+  #search::placeholder{color:var(--text-dim)}
+  #search:focus{border-color:rgba(255,255,255,0.32);background:rgba(255,255,255,0.08)}
+  .search-icon{position:absolute;left:10px;font-size:0.7rem;color:var(--text-dim);pointer-events:none}
+  #search-results{position:absolute;top:calc(100% + 6px);left:0;width:270px;background:rgba(10,10,18,0.98);border:1px solid var(--border);border-radius:10px;max-height:280px;overflow-y:auto;display:none;z-index:200;box-shadow:0 10px 40px rgba(0,0,0,0.7)}
+  .sr-item{padding:9px 15px;font-size:0.7rem;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.05);display:flex;justify-content:space-between;align-items:center;transition:background 0.12s}
+  .sr-item:hover{background:rgba(255,255,255,0.07)}
+  .sr-item:last-child{border-bottom:none}
+  .sr-dist{color:var(--text-dim);font-size:0.62rem}
+  .tb-right{margin-left:auto;display:flex;gap:5px;align-items:center;flex-shrink:0}
+  .tb-btn{background:rgba(255,255,255,0.05);border:1px solid var(--border);color:var(--text-dim);font-family:var(--sans);font-size:0.63rem;font-weight:500;letter-spacing:0.04em;padding:5px 11px;cursor:pointer;border-radius:6px;transition:all 0.18s;white-space:nowrap}
+  .tb-btn:hover{border-color:rgba(255,255,255,0.28);color:rgba(255,255,255,0.82);background:rgba(255,255,255,0.08)}
+  .tb-btn.active{border-color:rgba(255,255,255,0.45);color:#fff;background:rgba(255,255,255,0.11)}
+  #stats-display{font-size:0.63rem;color:var(--text-dim);letter-spacing:0.04em;white-space:nowrap}
+
+  /* FILTER PANEL */
+  #filter-panel{position:fixed;left:0;top:50px;bottom:0;z-index:90;width:242px;background:var(--panel-bg);border-right:1px solid var(--border);backdrop-filter:blur(24px);padding:22px 18px;overflow-y:auto;transform:translateX(-100%);transition:transform 0.3s cubic-bezier(0.4,0,0.2,1)}
+  #filter-panel.open{transform:translateX(0)}
+  .panel-title{font-size:0.58rem;font-weight:600;letter-spacing:0.18em;color:rgba(255,255,255,0.45);text-transform:uppercase;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+  .filter-section{margin-bottom:22px}
+  .filter-label{font-size:0.68rem;color:var(--text-mid);letter-spacing:0.02em;margin-bottom:10px;display:block;font-weight:400}
+  .filter-val{float:right;color:#fff;font-weight:500}
+  input[type=range]{width:100%;-webkit-appearance:none;background:transparent;cursor:pointer;margin:4px 0 10px}
+  input[type=range]::-webkit-slider-track{height:1px;background:rgba(255,255,255,0.14);border-radius:1px}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:#fff;margin-top:-6px}
+  .check-row{display:flex;align-items:center;gap:9px;margin-bottom:8px;cursor:pointer}
+  .check-row input{display:none}
+  .check-box{width:13px;height:13px;border:1px solid rgba(255,255,255,0.18);border-radius:3px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.18s}
+  .check-row input:checked+.check-box{border-color:rgba(255,255,255,0.55);background:rgba(255,255,255,0.13)}
+  .check-row input:checked+.check-box::after{content:"✓";font-size:8px;color:#fff}
+  .check-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+  .check-text{font-size:0.68rem;color:var(--text-mid);letter-spacing:0.01em}
+
+  /* DETAIL PANEL */
+  #detail-panel{position:fixed;right:0;top:50px;bottom:0;z-index:90;width:278px;background:var(--panel-bg);border-left:1px solid var(--border);backdrop-filter:blur(24px);transform:translateX(100%);transition:transform 0.35s cubic-bezier(0.4,0,0.2,1);overflow-y:auto}
+  #detail-panel.open{transform:translateX(0)}
+  #detail-header{padding:20px 20px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--panel-bg);backdrop-filter:blur(24px)}
+  #detail-star-preview{display:block;margin:0 auto 14px;border-radius:50%}
+  #detail-name{font-size:1rem;font-weight:600;color:#fff;letter-spacing:0.01em;margin-bottom:4px}
+  #detail-type{font-size:0.63rem;color:var(--text-dim);letter-spacing:0.1em;text-transform:uppercase}
+  #detail-close{position:absolute;top:16px;right:16px;background:rgba(255,255,255,0.07);border:1px solid var(--border);color:var(--text-mid);cursor:pointer;font-size:0.8rem;width:27px;height:27px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:all 0.18s}
+  #detail-close:hover{background:rgba(255,255,255,0.13);color:#fff}
+  #detail-body{padding:14px 20px}
+  .detail-row{display:flex;justify-content:space-between;align-items:baseline;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.04)}
+  .detail-key{font-size:0.58rem;color:var(--text-dim);letter-spacing:0.06em;text-transform:uppercase}
+  .detail-val{font-size:0.68rem;color:var(--text-mid);text-align:right;max-width:58%;word-break:break-all}
+  .detail-val.hi{color:#fff;font-weight:500}
+
+  /* TOOLTIP */
+  #tooltip{position:fixed;z-index:500;background:rgba(8,8,18,0.94);border:1px solid var(--border);border-radius:11px;padding:12px 16px;pointer-events:none;opacity:0;transition:opacity 0.1s;min-width:162px;box-shadow:0 10px 30px rgba(0,0,0,0.55)}
+  #tooltip.show{opacity:1}
+  #tt-name{font-size:0.78rem;font-weight:600;color:#fff;margin-bottom:7px;letter-spacing:0.01em}
+  .tt-row{font-size:0.62rem;color:var(--text-dim);margin-bottom:3px;display:flex;justify-content:space-between;gap:14px}
+  .tt-val{color:var(--text-mid)}
+
+  /* LEGEND */
+  #legend{position:fixed;bottom:42px;right:0;z-index:90;background:rgba(8,8,18,0.95);border:1px solid var(--border);border-right:none;border-radius:10px 0 0 10px;padding:14px 16px;backdrop-filter:blur(20px);transform:translateX(100%);transition:transform 0.3s;box-shadow:-4px 0 24px rgba(0,0,0,0.4)}
+  #legend.open{transform:translateX(0)}
+  .legend-title{font-size:0.58rem;font-weight:600;letter-spacing:0.14em;color:rgba(255,255,255,0.44);text-transform:uppercase;margin-bottom:11px}
+  .legend-row{display:flex;align-items:center;gap:9px;margin-bottom:6px}
+  .legend-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+  .legend-lbl{font-size:0.63rem;color:var(--text-mid)}
+
+  /* BOTTOM BAR */
+  #bottombar{position:fixed;bottom:0;left:0;right:0;z-index:100;height:38px;background:rgba(0,0,6,0.85);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);display:flex;align-items:center;padding:0 20px;gap:22px;border-top:1px solid var(--border)}
+  .bb-item{font-size:0.6rem;color:var(--text-dim);letter-spacing:0.03em;white-space:nowrap}
+  .bb-key{color:rgba(255,255,255,0.72);margin-right:5px;font-weight:500}
+
+
+  #reset-btn{position:fixed;bottom:50px;left:16px;z-index:100;background:rgba(255,255,255,0.06);border:1px solid var(--border);color:var(--text-mid);font-family:var(--sans);font-size:0.65rem;font-weight:500;letter-spacing:0.03em;padding:7px 14px;cursor:pointer;border-radius:7px;backdrop-filter:blur(12px);transition:all 0.18s}
+  #reset-btn:hover{border-color:rgba(255,255,255,0.28);color:#fff;background:rgba(255,255,255,0.1)}
+
+  #data-credit{margin-left:auto}#data-credit,#data-license{font-size:0.55rem;color:rgba(255,255,255,0.28);text-decoration:none;letter-spacing:0.04em;transition:color 0.18s;font-family:var(--sans)}
+  #data-license{margin-left:0}
+  #data-credit:hover,#data-license:hover{color:rgba(255,255,255,0.65)}
+  .bb-sep-v{color:rgba(255,255,255,0.15);font-size:0.55rem}
+  ::-webkit-scrollbar{width:3px}
+  ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:2px}
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+
+<div id="loader">
+  <h1>Our Local Stars</h1>
+  <div id="loader-sub">Within 500 Light Years</div>
+  <div id="progress-wrap"><div id="progress-bar"></div></div>
+  <div id="loader-count">INITIALISING...</div>
+  <div id="loader-error"></div>
+</div>
+
+<div id="topbar">
+  <h1>SOL · LOCAL STAR MAP</h1>
+  <div class="tb-sep"></div>
+  <div id="search-wrap">
+    <span class="search-icon">⌕</span>
+    <input id="search" type="text" placeholder="SEARCH STARS..." autocomplete="off" spellcheck="false">
+    <div id="search-results"></div>
+  </div>
+  <div class="tb-right">
+    <span id="stats-display">— STARS</span>
+    <button class="tb-btn" id="btn-filters">FILTERS</button>
+    <button class="tb-btn active" id="btn-rings">RINGS</button>
+    <button class="tb-btn active" id="btn-stems">STEMS</button>
+    <button class="tb-btn" id="btn-legend">LEGEND</button>
+    <button class="tb-btn" id="btn-fs">⛶</button>
+  </div>
+</div>
+
+<div id="filter-panel">
+  <div class="panel-title">FILTERS</div>
+  <div class="filter-section">
+    <label class="filter-label">VISIBLE COUNT <span class="filter-val" id="count-val">1000</span></label>
+    <input type="range" id="count-slider" min="20" max="1000" value="1000" step="10">
+  </div>
+  <div class="filter-section">
+    <label class="filter-label">MAX DISTANCE <span class="filter-val" id="dist-val">ALL</span></label>
+    <input type="range" id="dist-slider" min="4" max="500" value="500" step="1">
+  </div>
+  <div class="filter-section">
+    <label class="filter-label">MAX MAGNITUDE <span class="filter-val" id="mag-val">+16</span></label>
+    <input type="range" id="mag-slider" min="-2" max="16" value="16" step="0.5">
+  </div>
+  <div class="filter-section">
+    <label class="filter-label">STAR TYPES</label>
+    <label class="check-row"><input type="checkbox" class="type-check" data-type="O" checked><span class="check-box"></span><span class="check-dot" style="background:#9BB0FF"></span><span class="check-text">O — BLUE</span></label>
+    <label class="check-row"><input type="checkbox" class="type-check" data-type="B" checked><span class="check-box"></span><span class="check-dot" style="background:#AABFFF"></span><span class="check-text">B — BLUE-WHITE</span></label>
+    <label class="check-row"><input type="checkbox" class="type-check" data-type="A" checked><span class="check-box"></span><span class="check-dot" style="background:#CAD7FF"></span><span class="check-text">A — WHITE</span></label>
+    <label class="check-row"><input type="checkbox" class="type-check" data-type="F" checked><span class="check-box"></span><span class="check-dot" style="background:#F8F7FF"></span><span class="check-text">F — YELLOW-WHITE</span></label>
+    <label class="check-row"><input type="checkbox" class="type-check" data-type="G" checked><span class="check-box"></span><span class="check-dot" style="background:#FFF4EA"></span><span class="check-text">G — SUN-LIKE</span></label>
+    <label class="check-row"><input type="checkbox" class="type-check" data-type="K" checked><span class="check-box"></span><span class="check-dot" style="background:#FFDDB4"></span><span class="check-text">K — ORANGE</span></label>
+    <label class="check-row"><input type="checkbox" class="type-check" data-type="M" checked><span class="check-box"></span><span class="check-dot" style="background:#FF9B63"></span><span class="check-text">M — RED DWARF</span></label>
+    <label class="check-row"><input type="checkbox" class="type-check" data-type="D" checked><span class="check-box"></span><span class="check-dot" style="background:#C8E8FF"></span><span class="check-text">D — WHITE DWARF</span></label>
+    <label class="check-row"><input type="checkbox" class="type-check" data-type="?" checked><span class="check-box"></span><span class="check-dot" style="background:#777"></span><span class="check-text">OTHER</span></label>
+  </div>
+</div>
+
+<div id="detail-panel">
+  <div id="detail-header">
+    <canvas id="detail-star-preview" width="56" height="56"></canvas>
+    <div id="detail-name">—</div>
+    <div id="detail-type">—</div>
+    <button id="detail-close">✕</button>
+  </div>
+  <div id="detail-body"></div>
+</div>
+
+<div id="tooltip">
+  <div id="tt-name">—</div>
+  <div class="tt-row"><span>DISTANCE</span><span class="tt-val" id="tt-dist">—</span></div>
+  <div class="tt-row"><span>TYPE</span><span class="tt-val" id="tt-type">—</span></div>
+  <div class="tt-row"><span>APP. MAG</span><span class="tt-val" id="tt-mag">—</span></div>
+  <div class="tt-row"><span>LUMINOSITY</span><span class="tt-val" id="tt-lum">—</span></div>
+</div>
+
+<div id="legend">
+  <div class="legend-title">SPECTRAL CLASS</div>
+  <div class="legend-row"><div class="legend-dot" style="background:#9BB0FF"></div><div class="legend-lbl">O — Blue (&gt;30,000K)</div></div>
+  <div class="legend-row"><div class="legend-dot" style="background:#AABFFF"></div><div class="legend-lbl">B — Blue-White</div></div>
+  <div class="legend-row"><div class="legend-dot" style="background:#CAD7FF"></div><div class="legend-lbl">A — White</div></div>
+  <div class="legend-row"><div class="legend-dot" style="background:#F8F7FF"></div><div class="legend-lbl">F — Yellow-White</div></div>
+  <div class="legend-row"><div class="legend-dot" style="background:#FFF4EA"></div><div class="legend-lbl">G — Yellow (Sun)</div></div>
+  <div class="legend-row"><div class="legend-dot" style="background:#FFDDB4"></div><div class="legend-lbl">K — Orange</div></div>
+  <div class="legend-row"><div class="legend-dot" style="background:#FF9B63"></div><div class="legend-lbl">M — Red Dwarf</div></div>
+  <div class="legend-row"><div class="legend-dot" style="background:#C8E8FF"></div><div class="legend-lbl">D — White Dwarf</div></div>
+</div>
+
+<button id="reset-btn">⌖ RESET VIEW</button>
+
+<div id="bottombar">
+  <span class="bb-item"><span class="bb-key">DRAG</span>ORBIT</span>
+  <span class="bb-item"><span class="bb-key">SCROLL</span>ZOOM</span>
+  <span class="bb-item"><span class="bb-key">RIGHT-DRAG</span>PAN</span>
+  <span class="bb-item"><span class="bb-key">CLICK</span>SELECT</span>
+  <span class="bb-item"><span class="bb-key">R</span>RESET</span>
+  <span class="bb-item"><span class="bb-key">F</span>FULLSCREEN</span>
+  <a id="data-credit" href="https://www.astronexus.com/projects/hyg" target="_blank" rel="noopener">HYG Database</a> <span class="bb-sep-v"></span> <a id="data-license" href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════
+const PC_TO_LY = 3.26156;
+
+// Logarithmic spatial scale.
+// Real distances span a few LY out to 500+ LY. Without log compression, far stars
+// dominate the scene and nearby ones are crammed against the origin.
+// sceneRadius = LOG_SCALE * log10(1 + distLy / LOG_BASE)
+const LOG_SCALE = 28;
+const LOG_BASE  = 1.5;
+
+function distToScene(distLy) {
+  if (distLy <= 0) return 0;
+  return LOG_SCALE * Math.log10(1 + distLy / LOG_BASE);
+}
+
+// ═══════════════════════════════════════════
+// GLOBALS
+// ═══════════════════════════════════════════
+let scene, camera, renderer, clock;
+let starMeshes = [];        // {mesh, stem, data}
+let starData = [];          // sorted by distLy ascending; [0] is Sol
+
+// Camera spherical coords around panOffset
+let camTheta = 0.7, camPhi = 1.0, camRadius = 26;
+let tgtTheta = 0.7, tgtPhi = 1.0, tgtRadius = 26;
+let panOffset = new THREE.Vector3();
+let tgtPan    = new THREE.Vector3();
+let flyTarget = null;
+
+let isDragging = false, isRight = false;
+let lastMX = 0, lastMY = 0, totalDrag = 0;
+let hoveredMesh = null;
+
+let ringObjs = [];
+let stemGroup = null;
+let showRings = true, showStems = true;
+
+// Filters
+let visibleCount = 1000;        // top-N closest stars to render (cheap perf cap)
+let filterDistLy = 99999, filterMag = 16;
+let enabledTypes = new Set(['O','B','A','F','G','K','M','L','T','D','W','C','S','?']);
+let enhancedMode = true;  // always enhanced
+
+// ═══════════════════════════════════════════
+// COLOUR — from B-V colour index (CSV `ci` column)
+// Calibrated to standard stellar photometry tables.
+// ═══════════════════════════════════════════
+function ciToHex(ci) {
+  if (typeof ci !== 'number' || isNaN(ci)) return '#ffffff';
+  const t = Math.max(0, Math.min(1, (ci + 0.4) / 2.4));
+  const stops = [
+    [0.000, [155, 176, 255]], // O9
+    [0.085, [164, 188, 255]], // B2
+    [0.167, [185, 207, 255]], // B8
+    [0.250, [206, 219, 255]], // A2
+    [0.333, [234, 236, 255]], // A7
+    [0.417, [248, 247, 255]], // F0
+    [0.500, [255, 252, 248]], // F5
+    [0.542, [255, 248, 235]], // G0
+    [0.583, [255, 244, 220]], // G2 - the Sun
+    [0.667, [255, 232, 190]], // G8
+    [0.750, [255, 216, 155]], // K2
+    [0.833, [255, 195, 115]], // K5
+    [0.917, [255, 168,  80]], // M0
+    [1.000, [255, 138,  50]], // M8
+  ];
+  let i = 0;
+  while (i < stops.length - 2 && t > stops[i+1][0]) i++;
+  const [t0, c0] = stops[i];
+  const [t1, c1] = stops[i+1];
+  const f = (t1 > t0) ? Math.max(0, Math.min(1, (t-t0)/(t1-t0))) : 0;
+  const r = Math.round(c0[0] + f*(c1[0]-c0[0]));
+  const g = Math.round(c0[1] + f*(c1[1]-c0[1]));
+  const b = Math.round(c0[2] + f*(c1[2]-c0[2]));
+  return '#' + r.toString(16).padStart(2,'0')
+             + g.toString(16).padStart(2,'0')
+             + b.toString(16).padStart(2,'0');
+}
+
+// ═══════════════════════════════════════════
+// SPECTRAL CLASS
+// ═══════════════════════════════════════════
+function getClass(spect) {
+  if (!spect || !spect.trim()) return '?';
+  let s = spect.trim();
+  // White dwarfs use uppercase 'D' prefix (DA, DB, DC, DO, DQ, DZ).
+  // Distinguish from lowercase 'd' which means main-sequence dwarf
+  // (e.g. "dM5.5e" = M-dwarf, NOT a white dwarf).
+  if (s[0] === 'D' && s.length > 1 && /[A-Z0-9]/.test(s[1])) return 'D';
+  // Strip subdwarf "sd" or dwarf "d" prefix before searching
+  // (covers Barnard's "sdM4", Procyon-likes "dM6", etc.)
+  if (s.toLowerCase().startsWith('sd')) s = s.slice(2);
+  else if (s.startsWith('d')) s = s.slice(1);
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i].toUpperCase();
+    if ('OBAFGKMLTWCS'.includes(c)) return c;
+  }
+  return '?';
+}
+function typeName(cls) {
+  const m = {O:'O-Type (Blue Supergiant)',B:'B-Type (Blue-White)',A:'A-Type (White)',
+    F:'F-Type (Yellow-White)',G:'G-Type (Sun-like)',K:'K-Type (Orange Dwarf)',
+    M:'M-Type (Red Dwarf)',L:'L-Type (Brown Dwarf)',T:'T-Type (Methane Dwarf)',
+    D:'White Dwarf',W:'Wolf-Rayet',C:'Carbon Star',S:'S-Type (Giant)','?':'Unknown'};
+  return m[cls]||'Unknown';
+}
+
+// ═══════════════════════════════════════════
+// STAR SPRITE TEXTURE
+// ═══════════════════════════════════════════
+const texCache = {};
+function makeStarTex(hexColor, glow) {
+  const key = hexColor+(glow?'G':'');
+  if (texCache[key]) return texCache[key];
+  const sz=128, cx=sz/2;
+  const c=document.createElement('canvas');
+  c.width=c.height=sz;
+  const ctx=c.getContext('2d');
+  const big=parseInt(hexColor.replace('#',''),16);
+  const ri=(big>>16)&255, gi=(big>>8)&255, bi=big&255;
+  if (glow) {
+    const gOuter=ctx.createRadialGradient(cx,cx,0,cx,cx,sz/2);
+    gOuter.addColorStop(0,   `rgba(${ri},${gi},${bi},1)`);
+    gOuter.addColorStop(0.07,`rgba(${ri},${gi},${bi},0.9)`);
+    gOuter.addColorStop(0.18,`rgba(${ri},${gi},${bi},0.35)`);
+    gOuter.addColorStop(0.45,`rgba(${ri},${gi},${bi},0.08)`);
+    gOuter.addColorStop(1.0, `rgba(0,0,0,0)`);
+    ctx.fillStyle=gOuter; ctx.fillRect(0,0,sz,sz);
+  }
+  const cR=glow?sz*0.09:sz*0.13;
+  const gCore=ctx.createRadialGradient(cx,cx,0,cx,cx,cR);
+  gCore.addColorStop(0,  `rgba(255,255,255,1)`);
+  gCore.addColorStop(0.3,`rgba(${ri},${gi},${bi},1)`);
+  gCore.addColorStop(0.7,`rgba(${ri},${gi},${bi},0.4)`);
+  gCore.addColorStop(1,  `rgba(0,0,0,0)`);
+  ctx.fillStyle=gCore; ctx.fillRect(0,0,sz,sz);
+  const tex=new THREE.CanvasTexture(c);
+  texCache[key]=tex;
+  return tex;
+}
+
+// ═══════════════════════════════════════════
+// LOG-SCALE STAR POSITION
+//
+// HYG database axis convention:
+//   x = toward galactic centre (RA=0, Dec=0)
+//   y = direction of galactic rotation (RA=6h, Dec=0)
+//   z = toward galactic north pole (Dec=+90°)
+//
+// We map HYG → scene (right-handed Y-up):
+//   sceneX =  HYG.x   (right)
+//   sceneY =  HYG.z   (up — galactic north pole)
+//   sceneZ = -HYG.y   (toward viewer)
+//
+// All three axes are populated → stars surround Sol in 3D, not just one direction.
+// Direction is preserved exactly; only radial distance is log-compressed.
+// ═══════════════════════════════════════════
+function starPos(d) {
+  if (d.isSun) return new THREE.Vector3(0,0,0);
+  const rx =  d.x * PC_TO_LY;
+  const ry =  d.z * PC_TO_LY;
+  const rz = -d.y * PC_TO_LY;
+  const realDist = Math.sqrt(rx*rx + ry*ry + rz*rz);
+  if (realDist < 0.0001) return new THREE.Vector3(0,0,0);
+  const sceneDist = distToScene(realDist);
+  const scale = sceneDist / realDist;
+  return new THREE.Vector3(rx*scale, ry*scale, rz*scale);
+}
+
+// ═══════════════════════════════════════════
+// DISTANCE RINGS — placed in the galactic plane (y=0)
+// Real LY values, log-scale scene radii.
+// ═══════════════════════════════════════════
+function makeRings() {
+  const out = [];
+  [5, 10, 20, 30, 50, 100, 200, 500].forEach(ly => {
+    const r = distToScene(ly);
+    const pts = [];
+    for (let i=0; i<=128; i++) {
+      const a=(i/128)*Math.PI*2;
+      pts.push(new THREE.Vector3(Math.cos(a)*r, 0, Math.sin(a)*r));
+    }
+    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+    const mat = new THREE.LineBasicMaterial({color:0x334466, transparent:true, opacity:0.6});
+    const ring = new THREE.Line(geo, mat);
+    ring._ly = ly;
+    ring._sceneR = r;
+    out.push(ring);
+  });
+  return out;
+}
+
+// ═══════════════════════════════════════════
+// VERTICAL STEMS — replaces grid.
+// Each visible star drops a faint line from its 3D position
+// to its projection on the y=0 plane. This makes the third
+// dimension legible: stars above/below the galactic plane
+// stand out instead of looking flat on the projection.
+// ═══════════════════════════════════════════
+function rebuildStems() {
+  if (stemGroup) {
+    scene.remove(stemGroup);
+    stemGroup.geometry.dispose();
+    stemGroup.material.dispose();
+    stemGroup = null;
+  }
+  const pts = [];
+  starMeshes.forEach(s => {
+    if (s.data.isSun) return;
+    if (!s.mesh.visible) return;
+    const p = s.mesh.position;
+    // Skip near-flat stars (< 0.4 scene units off the plane) — line would be invisible
+    if (Math.abs(p.y) < 0.4) return;
+    pts.push(p.x, 0,   p.z);   // foot on plane
+    pts.push(p.x, p.y, p.z);   // tip at star
+  });
+  if (!pts.length) return;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  const mat = new THREE.LineBasicMaterial({
+    color: 0x4a6a90, transparent: true, opacity: 0.32
+  });
+  stemGroup = new THREE.LineSegments(geo, mat);
+  stemGroup.visible = showStems;
+  scene.add(stemGroup);
+}
+
+// ═══════════════════════════════════════════
+// THREE.JS INIT
+// ═══════════════════════════════════════════
+function initThree() {
+  scene    = new THREE.Scene();
+  clock    = new THREE.Clock();
+  camera   = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.001, 5000);
+  renderer = new THREE.WebGLRenderer({canvas:document.getElementById('canvas'), antialias:true});
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setClearColor(0x000008, 1);
+  updateCamera();
+}
+
+// ═══════════════════════════════════════════
+// CAMERA
+// ═══════════════════════════════════════════
+function updateCamera() {
+  const sp=Math.sin(camPhi), cp=Math.cos(camPhi);
+  const st=Math.sin(camTheta), ct=Math.cos(camTheta);
+  camera.position.set(
+    panOffset.x + camRadius*sp*ct,
+    panOffset.y + camRadius*cp,
+    panOffset.z + camRadius*sp*st
+  );
+  camera.lookAt(panOffset);
+}
+
+function resetView() {
+  flyTarget={theta:0.7,phi:1.0,radius:26,pan:new THREE.Vector3(0,0,0)};
+}
+
+// Fly-to that puts SPACE behind the clicked star, not Sol.
+//
+// We orbit around the star's scene position. Camera position is placed
+// on the OPPOSITE side of the star from Sol — i.e. radially OUTWARD —
+// so when looking at the star, deep space is the backdrop.
+function flyToStar(d) {
+  if (d.isSun) {
+    // Fly to a close orbit around Sol itself (not just reset)
+    flyTarget = {
+      theta: 0.9,
+      phi:   1.1,
+      radius: 4.0,
+      pan:   new THREE.Vector3(0,0,0)
+    };
+    return;
+  }
+  const pos = starPos(d);
+  const len = pos.length();
+  if (len < 0.001) { resetView(); return; }
+
+  // Outward unit vector from Sol toward the star.
+  const outward = pos.clone().multiplyScalar(1 / len);
+
+  // Camera position: a bit further out from the star, along the outward direction.
+  // pan = star itself, so star is centred. Camera spherical coords are defined
+  // relative to pan (the star), so we need spherical coords of (camera - star).
+  const offsetLen = 2.5;                                  // distance from star
+  const camWorld  = pos.clone().add(outward.multiplyScalar(offsetLen));
+  const rel       = camWorld.clone().sub(pos);            // = outward * 2.5
+
+  const radius = rel.length();
+  // Spherical: phi from +Y, theta in XZ plane
+  const phi   = Math.acos(Math.max(-1, Math.min(1, rel.y / radius)));
+  const theta = Math.atan2(rel.z, rel.x);
+
+  flyTarget = {
+    theta,
+    phi:   Math.max(0.05, Math.min(Math.PI-0.05, phi)),
+    radius,
+    pan:   pos.clone()
+  };
+}
+
+// ═══════════════════════════════════════════
+// BUILD STARS
+// ═══════════════════════════════════════════
+function buildStars(data) {
+  starMeshes.forEach(s=>scene.remove(s.mesh));
+  starMeshes=[];
+
+  data.forEach(d=>{
+    // ── SUN ──
+    // Realistic proportion: Sun radius is ~7.35e-8 LY. At our scene scale
+    // (1 LY ≈ 5.8 scene units near the origin), that's far too small to see.
+    // We render Sol the same way other stars are rendered — as a sprite —
+    // and size it from its luminosity (1 ☉) using the same formula.
+    // Removed the giant 0.5-radius mesh + halo that dwarfed everything
+    // and sat behind every star you flew to.
+    if (d.isSun) {
+      const hex = '#FFE9A8';                              // warm G2V tint
+      const tex = makeStarTex(hex, true);
+      const mat = new THREE.SpriteMaterial({map:tex,transparent:true,depthWrite:false,sizeAttenuation:true});
+      const sp  = new THREE.Sprite(mat);
+      sp.position.set(0,0,0);
+      const size = enhancedMode ? 2.4 : 1.6;              // matches lum=1 in formula below
+      sp.scale.set(size,size,1);
+      sp._data = d; sp._baseSize = size;
+      scene.add(sp);
+      starMeshes.push({mesh:sp, data:d});
+      return;
+    }
+
+    // ── OTHER STARS ──
+    const lum   = Math.max(0.000001, isNaN(d.lum)?0.000001:d.lum);
+    const hex   = ciToHex(d.ci);
+    const bright = lum > 1.5 || enhancedMode;
+    const tex   = makeStarTex(hex, bright);
+    const mat   = new THREE.SpriteMaterial({map:tex,transparent:true,depthWrite:false,sizeAttenuation:true});
+    const sp    = new THREE.Sprite(mat);
+
+    sp.position.copy(starPos(d));
+
+    // Log-scale size: faint stars still visible, bright ones pop
+    const logL = Math.log10(lum);
+    const size = enhancedMode
+      ? Math.max(0.8, Math.min(12, 2.4 + logL*1.5))
+      : Math.max(0.5, Math.min(7,   1.6 + logL*1.1));
+
+    sp.scale.set(size,size,1);
+    sp._data=d; sp._baseSize=size;
+    scene.add(sp);
+    starMeshes.push({mesh:sp,data:d});
+  });
+}
+
+// ═══════════════════════════════════════════
+// RAYCASTING
+// ═══════════════════════════════════════════
+const raycaster=new THREE.Raycaster();
+raycaster.params.Sprite={threshold:0.8};
+
+function starUnderMouse(mx,my) {
+  raycaster.setFromCamera({x:(mx/innerWidth)*2-1,y:-(my/innerHeight)*2+1},camera);
+  const hits=raycaster.intersectObjects(starMeshes.filter(s=>s.mesh.visible).map(s=>s.mesh));
+  return hits.length?hits[0].object:null;
+}
+
+// ═══════════════════════════════════════════
+// TOOLTIP
+// ═══════════════════════════════════════════
+const tooltip=document.getElementById('tooltip');
+function showTooltip(d,mx,my) {
+  document.getElementById('tt-name').textContent=d.name;
+  document.getElementById('tt-dist').textContent=d.isSun?'0 LY — You are here':d.distLy.toFixed(2)+' LY';
+  document.getElementById('tt-type').textContent=typeName(d.cls);
+  document.getElementById('tt-mag').textContent=isNaN(d.mag)?'—':d.mag.toFixed(2);
+  document.getElementById('tt-lum').textContent=d.lum<0.001?d.lum.toExponential(2)+'☉':d.lum.toFixed(4)+'☉';
+  tooltip.style.left=Math.min(mx+18,innerWidth-185)+'px';
+  tooltip.style.top=Math.min(my-10,innerHeight-140)+'px';
+  tooltip.classList.add('show');
+}
+function hideTooltip(){tooltip.classList.remove('show')}
+
+// ═══════════════════════════════════════════
+// DETAIL PANEL
+// ═══════════════════════════════════════════
+function showDetail(d) {
+  const pv=document.getElementById('detail-star-preview');
+  const ctx=pv.getContext('2d');
+  ctx.clearRect(0,0,56,56);
+  const hex=d.isSun?'#FFE9A8':ciToHex(d.ci);
+  const big=parseInt(hex.replace('#',''),16);
+  const ri=(big>>16)&255,gi=(big>>8)&255,bi=big&255;
+  const grd=ctx.createRadialGradient(28,28,0,28,28,24);
+  grd.addColorStop(0,`rgba(255,255,255,1)`);
+  grd.addColorStop(0.2,`rgba(${ri},${gi},${bi},1)`);
+  grd.addColorStop(0.6,`rgba(${ri},${gi},${bi},0.4)`);
+  grd.addColorStop(1,`rgba(0,0,0,0)`);
+  ctx.fillStyle=grd; ctx.fillRect(0,0,56,56);
+
+  document.getElementById('detail-name').textContent=d.name;
+  document.getElementById('detail-type').textContent=typeName(d.cls).toUpperCase();
+
+  const rows=[
+    ['DISTANCE',      d.isSun?'0 LY (Sol)':d.distLy.toFixed(4)+' LY',true],
+    ['DIST (PC)',      d.isSun?'0':d.dist.toFixed(4)+' PC',false],
+    ['APP. MAGNITUDE', isNaN(d.mag)?'—':d.mag.toFixed(2),false],
+    ['ABS. MAGNITUDE', isNaN(d.absmag)?'—':d.absmag.toFixed(4),false],
+    ['LUMINOSITY',     d.lum<0.001?d.lum.toExponential(3)+'☉':d.lum.toFixed(4)+'☉',true],
+    ['SPECTRUM',       d.spect||'—',false],
+    ['COLOUR INDEX',   isNaN(d.ci)?'—':d.ci.toFixed(3),false],
+    ['COLOUR HEX',     hex,false],
+    ['CONSTELLATION',  d.con||'—',false],
+    ['RADIAL VEL.',    (!isNaN(d.rv)&&d.rv!=null)?d.rv.toFixed(1)+' km/s':'—',false],
+    ['VARIABLE',       d.var||'—',false],
+    ['HIPPARCOS ID',   d.hip||'—',false],
+    ['HENRY DRAPER',   d.hd||'—',false],
+    ['GLIESE ID',      d.gl||'—',false],
+    ['BAYER/FLAM.',    d.bf||d.bayer||'—',false],
+    ['RA',             isNaN(d.ra)?'—':d.ra.toFixed(5)+'h',false],
+    ['DEC',            isNaN(d.dec)?'—':d.dec.toFixed(5)+'°',false],
+  ];
+  document.getElementById('detail-body').innerHTML=rows.map(([k,v,hi])=>
+    `<div class="detail-row"><span class="detail-key">${k}</span><span class="detail-val${hi?' hi':''}">${v}</span></div>`
+  ).join('');
+  document.getElementById('detail-panel').classList.add('open');
+}
+
+// ═══════════════════════════════════════════
+// FILTERS
+//
+// Visibility = (within top-N closest) AND (under distance cap)
+//              AND (under magnitude cap) AND (spectral type enabled)
+// ═══════════════════════════════════════════
+function applyFilters() {
+  let vis=0, idx=0;
+  starMeshes.forEach(s=>{
+    const d=s.data;
+    const inCount = idx < visibleCount;
+    idx++;
+    const ok=d.isSun||(
+      inCount &&
+      d.distLy<=filterDistLy &&
+      (isNaN(d.mag)||d.mag<=filterMag) &&
+      enabledTypes.has(d.cls)
+    );
+    s.mesh.visible=ok;
+    if(ok)vis++;
+  });
+  document.getElementById('stats-display').textContent=`${vis} STARS`;
+  rebuildStems();
+}
+
+// ═══════════════════════════════════════════
+// CSV PARSER
+// ═══════════════════════════════════════════
+function parseCSVLine(line) {
+  const cols=[]; let cur='',q=false;
+  for(let i=0;i<line.length;i++){
+    const ch=line[i];
+    if(ch==='"'){q=!q;continue}
+    if(ch===','&&!q){cols.push(cur.trim());cur='';continue}
+    cur+=ch;
+  }
+  cols.push(cur.trim());
+  return cols;
+}
+
+function parseCSV(text) {
+  const lines=text.replace(/\r/g,'').split('\n');
+  const headers=parseCSVLine(lines[0]);
+  const idx={};
+  headers.forEach((h,i)=>idx[h.trim()]=i);
+  const get=(v,h)=>idx[h]!==undefined&&v[idx[h]]!==undefined?v[idx[h]]:'';
+  const num=(v,h)=>parseFloat(get(v,h));
+
+  const data=[];
+  for(let li=1;li<lines.length;li++){
+    if(!lines[li].trim())continue;
+    const v=parseCSVLine(lines[li]);
+    if(v.length<8)continue;
+    const dist=num(v,'dist');
+    const id=get(v,'id');
+    const prop=get(v,'proper').trim();
+    const isSun=id==='0'||prop.toLowerCase()==='sol';
+    if(!isSun&&(isNaN(dist)||dist<=0||dist>=9999))continue;
+    const bf=get(v,'bf').trim(), gl=get(v,'gl').trim(), hip=get(v,'hip').trim();
+    const name=prop||bf||(gl?gl:'')||(hip?'HIP '+hip:`HYG-${id}`);
+    const ci=num(v,'ci'), lum=num(v,'lum'), rv=num(v,'rv');
+    data.push({
+      id,isSun,name,proper:prop,bf,gl,hip,
+      hd:get(v,'hd'),hr:get(v,'hr'),bayer:get(v,'bayer'),
+      con:get(v,'con').trim(),var:get(v,'var').trim(),
+      ra:num(v,'ra'),dec:num(v,'dec'),
+      dist:isSun?0:dist, distLy:isSun?0:dist*PC_TO_LY,
+      mag:num(v,'mag'),absmag:num(v,'absmag'),
+      lum:isNaN(lum)||lum<=0?0.000001:lum,
+      spect:get(v,'spect').trim(),
+      ci:isNaN(ci)?NaN:ci,
+      x:num(v,'x'),y:num(v,'y'),z:num(v,'z'),
+      rv:isNaN(rv)?null:rv,
+      cls:getClass(get(v,'spect')),
+    });
+  }
+
+  // Inject Sol if the catalogue doesn't include it. The HYG nearest_1000
+  // file omits Sol (it isn't a "nearby star" of itself), but we need it
+  // at the origin as a reference point.
+  const hasSol = data.some(d=>d.isSun);
+  if (!hasSol) {
+    data.push({
+      id:'sol',isSun:true,name:'Sol',proper:'Sol',bf:'',gl:'',hip:'',
+      hd:'',hr:'',bayer:'',con:'',var:'',
+      ra:0,dec:0,dist:0,distLy:0,
+      mag:-26.74,absmag:4.83,lum:1.0,
+      spect:'G2V',ci:0.656,x:0,y:0,z:0,rv:0,cls:'G'
+    });
+  }
+
+  data.sort((a,b)=>a.distLy-b.distLy);
+  return data;
+}
+
+// ═══════════════════════════════════════════
+// SEARCH
+// ═══════════════════════════════════════════
+const searchEl=document.getElementById('search');
+const searchRes=document.getElementById('search-results');
+searchEl.addEventListener('input',()=>{
+  const q=searchEl.value.trim().toLowerCase();
+  if(q.length<1){searchRes.style.display='none';return}
+  const hits=starData.filter(d=>{
+    const hay = (d.name+' '+d.proper+' '+d.bf+' '+d.gl+' '+d.con+' '+d.bayer).toLowerCase();
+    return hay.includes(q);
+  }).slice(0,15);
+  if(!hits.length){searchRes.style.display='none';return}
+  searchRes.innerHTML=hits.map(d=>
+    `<div class="sr-item" data-id="${d.id}"><span>${d.name}</span><span class="sr-dist">${d.isSun?'Sol':d.distLy.toFixed(1)+' LY'}</span></div>`
+  ).join('');
+  searchRes.style.display='block';
+});
+searchRes.addEventListener('click',e=>{
+  const item=e.target.closest('.sr-item');
+  if(!item)return;
+  const d=starData.find(s=>s.id===item.dataset.id);
+  if(!d)return;
+  // If this star is filtered out, surface it: bump visibleCount so it appears
+  const rank = starData.indexOf(d);
+  if (rank >= visibleCount) {
+    visibleCount = Math.min(starData.length, rank + 1);
+    document.getElementById('count-slider').value = Math.min(1000, visibleCount);
+    document.getElementById('count-val').textContent = visibleCount;
+    applyFilters();
+  }
+  flyToStar(d); showDetail(d);
+  searchRes.style.display='none';
+  searchEl.value=d.name;
+});
+document.addEventListener('click',e=>{
+  if(!e.target.closest('#search-wrap'))searchRes.style.display='none';
+});
+searchEl.addEventListener('keydown',e=>{
+  if(e.key==='Enter'){const f=searchRes.querySelector('.sr-item');if(f)f.click()}
+});
+
+// ═══════════════════════════════════════════
+// MOUSE INPUT
+// ═══════════════════════════════════════════
+const canvasEl=document.getElementById('canvas');
+canvasEl.addEventListener('mousedown',e=>{
+  isDragging=true;isRight=e.button===2;
+  lastMX=e.clientX;lastMY=e.clientY;totalDrag=0;flyTarget=null;
+});
+document.addEventListener('mousemove',e=>{
+  if(isDragging){
+    const dx=e.clientX-lastMX, dy=e.clientY-lastMY;
+    totalDrag+=Math.abs(dx)+Math.abs(dy);
+    if(isRight){
+      const right=new THREE.Vector3(),up=new THREE.Vector3();
+      right.crossVectors(camera.getWorldDirection(new THREE.Vector3()),camera.up).normalize();
+      up.copy(camera.up).normalize();
+      const spd=camRadius*0.001;
+      tgtPan.addScaledVector(right,-dx*spd);
+      tgtPan.addScaledVector(up,dy*spd);
+    } else {
+      tgtTheta-=dx*0.006;
+      tgtPhi=Math.max(0.04,Math.min(Math.PI-0.04,tgtPhi+dy*0.006));
+    }
+    lastMX=e.clientX;lastMY=e.clientY;
+    hideTooltip();
+  } else {
+    const hit=starUnderMouse(e.clientX,e.clientY);
+    if(hit&&hit._data){
+      hoveredMesh=hit;
+      document.body.style.cursor='pointer';
+      showTooltip(hit._data,e.clientX,e.clientY);
+    } else {
+      hoveredMesh=null;
+      document.body.style.cursor='crosshair';
+      hideTooltip();
+    }
+  }
+});
+document.addEventListener('mouseup',()=>{isDragging=false});
+document.addEventListener('contextmenu',e=>e.preventDefault());
+canvasEl.addEventListener('wheel',e=>{
+  tgtRadius=Math.max(0.3,Math.min(600,tgtRadius+e.deltaY*0.04));
+  flyTarget=null;
+},{passive:true});
+canvasEl.addEventListener('click',e=>{
+  if(totalDrag>5)return;
+  const hit=starUnderMouse(e.clientX,e.clientY);
+  if(hit&&hit._data){flyToStar(hit._data);showDetail(hit._data)}
+});
+
+// ═══════════════════════════════════════════
+// KEYBOARD
+// ═══════════════════════════════════════════
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT')return;
+  if(e.key==='r'||e.key==='R')resetView();
+  if(e.key==='f'||e.key==='F')toggleFS();
+  if(e.key==='ArrowLeft') tgtTheta-=0.06;
+  if(e.key==='ArrowRight')tgtTheta+=0.06;
+  if(e.key==='ArrowUp')   tgtPhi=Math.max(0.04,tgtPhi-0.06);
+  if(e.key==='ArrowDown') tgtPhi=Math.min(Math.PI-0.04,tgtPhi+0.06);
+  if(e.key==='Escape')document.getElementById('detail-panel').classList.remove('open');
+});
+function toggleFS(){
+  if(!document.fullscreenElement)document.documentElement.requestFullscreen();
+  else document.exitFullscreen();
+}
+
+// ═══════════════════════════════════════════
+// BUTTONS
+// ═══════════════════════════════════════════
+document.getElementById('btn-filters').addEventListener('click',function(){
+  document.getElementById('filter-panel').classList.toggle('open');
+  this.classList.toggle('active');
+});
+document.getElementById('btn-rings').addEventListener('click',function(){
+  showRings=!showRings;this.classList.toggle('active',showRings);
+  ringObjs.forEach(r=>r.visible=showRings);
+});
+document.getElementById('btn-stems').addEventListener('click',function(){
+  showStems=!showStems;this.classList.toggle('active',showStems);
+  if (stemGroup) stemGroup.visible = showStems;
+});
+document.getElementById('btn-legend').addEventListener('click',function(){
+  document.getElementById('legend').classList.toggle('open');
+  this.classList.toggle('active');
+});
+document.getElementById('btn-fs').addEventListener('click',toggleFS);
+document.getElementById('reset-btn').addEventListener('click',resetView);
+document.getElementById('detail-close').addEventListener('click',()=>{
+  document.getElementById('detail-panel').classList.remove('open');
+});
+
+// ═══════════════════════════════════════════
+// SLIDERS
+// ═══════════════════════════════════════════
+document.getElementById('count-slider').addEventListener('input',function(){
+  visibleCount = +this.value;
+  document.getElementById('count-val').textContent = visibleCount;
+  applyFilters();
+});
+document.getElementById('dist-slider').addEventListener('input',function(){
+  const v=+this.value;
+  filterDistLy = v >= 499 ? 99999 : v;
+  document.getElementById('dist-val').textContent = v>=499?'ALL':v+' LY';
+  applyFilters();
+});
+document.getElementById('mag-slider').addEventListener('input',function(){
+  filterMag=+this.value;
+  document.getElementById('mag-val').textContent=(filterMag>=0?'+':'')+filterMag;
+  applyFilters();
+});
+document.querySelectorAll('.type-check').forEach(cb=>{
+  cb.addEventListener('change',function(){
+    if(this.checked)enabledTypes.add(this.dataset.type);
+    else enabledTypes.delete(this.dataset.type);
+    applyFilters();
+  });
+});
+
+// ═══════════════════════════════════════════
+// RESIZE
+// ═══════════════════════════════════════════
+window.addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+
+// ═══════════════════════════════════════════
+// RING LABELS — CSS divs projected from 3D
+// ═══════════════════════════════════════════
+let labelEls=[], labelTimer=0;
+function updateRingLabels() {
+  labelEls.forEach(el=>el.remove()); labelEls=[];
+  if(!showRings)return;
+  ringObjs.forEach(ring=>{
+    if(!ring.visible)return;
+    const pt=new THREE.Vector3(ring._sceneR,0,0).project(camera);
+    const sx=(pt.x*0.5+0.5)*innerWidth;
+    const sy=(-pt.y*0.5+0.5)*innerHeight;
+    if(sx<5||sx>innerWidth-5||sy<5||sy>innerHeight-50)return;
+    const el=document.createElement('div');
+    el.style.cssText=`position:fixed;left:${sx}px;top:${sy}px;font-size:0.5rem;` +
+      `color:rgba(200,210,230,0.65);font-family:var(--sans);pointer-events:none;` +
+      `transform:translate(-50%,-50%);z-index:50;letter-spacing:0.08em;` +
+      `text-shadow:0 0 4px rgba(0,0,0,1);`;
+    el.textContent=ring._ly+' LY';
+    document.body.appendChild(el); labelEls.push(el);
+  });
+}
+
+// ═══════════════════════════════════════════
+// ANIMATE
+// ═══════════════════════════════════════════
+function lerp(a,b,t){return a+(b-a)*t}
+function animate() {
+  requestAnimationFrame(animate);
+  const dt=clock.getDelta();
+
+  if(flyTarget){
+    const spd=0.1;
+    tgtTheta =lerp(tgtTheta, flyTarget.theta, spd*2);
+    tgtPhi   =lerp(tgtPhi,   flyTarget.phi,   spd*2);
+    tgtRadius=lerp(tgtRadius,flyTarget.radius,spd*2);
+    tgtPan.lerp(flyTarget.pan,spd*2);
+    if(Math.abs(tgtRadius-flyTarget.radius)<0.01&&Math.abs(tgtTheta-flyTarget.theta)<0.002)
+      flyTarget=null;
+  }
+  const cs=0.1;
+  camTheta =lerp(camTheta, tgtTheta,  cs);
+  camPhi   =lerp(camPhi,   tgtPhi,    cs);
+  camRadius=lerp(camRadius,tgtRadius, cs);
+  panOffset.lerp(tgtPan,cs);
+  updateCamera();
+  if(hoveredMesh&&hoveredMesh._baseSize){
+    const p=1+0.2*Math.sin(Date.now()*0.006);
+    hoveredMesh.scale.set(hoveredMesh._baseSize*p,hoveredMesh._baseSize*p,1);
+  }
+  labelTimer++;
+  if(labelTimer%4===0)updateRingLabels();
+  renderer.render(scene,camera);
+}
+
+// ═══════════════════════════════════════════
+// LOAD DATA — reads nearest_1000_stars.csv from same directory.
+// No demo fallback: this map is built from the real catalogue.
+// ═══════════════════════════════════════════
+async function loadData(){
+  const bar=document.getElementById('progress-bar');
+  const info=document.getElementById('loader-count');
+  const errEl=document.getElementById('loader-error');
+  const set=(p,m)=>{bar.style.width=p+'%';info.textContent=m};
+
+  set(5,'FETCHING STAR CATALOGUE...');
+  let text=null, err=null;
+  try {
+    const res=await fetch('nearest_1000_stars.csv');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    set(25,'LOADING nearest_1000_stars.csv...');
+    text = await res.text();
+    if (!text.includes('dist') || text.length < 500) {
+      throw new Error('CSV malformed or empty');
+    }
+  } catch (e) {
+    err = e;
+  }
+
+  if (err) {
+    info.textContent = 'CATALOGUE NOT FOUND';
+    errEl.style.display = 'block';
+    errEl.innerHTML =
+      `Could not load <b>nearest_1000_stars.csv</b>.<br><br>` +
+      `Place the CSV in the same directory as this HTML file.<br>` +
+      `If you opened this with file:// double-click, the browser blocks fetch.<br>` +
+      `Run a local server: <code style="color:#4fa3ff">python3 -m http.server</code><br>` +
+      `or host both files together on GitHub Pages.<br><br>` +
+      `<span style="color:#7a92b8">Error: ${err.message}</span>`;
+    return;
+  }
+
+  set(45,'PARSING CATALOGUE...');
+  await new Promise(r=>setTimeout(r,10));
+  starData = parseCSV(text);
+
+  set(68,`PLACING ${starData.length} STARS (LOG SCALE)...`);
+  await new Promise(r=>setTimeout(r,10));
+  buildStars(starData);
+
+  set(84,'BUILDING DISTANCE RINGS...');
+  ringObjs=makeRings();
+  ringObjs.forEach(r=>scene.add(r));
+
+  set(96,'FINALISING...');
+  applyFilters();
+  set(100,`READY — ${starData.length} STARS LOADED`);
+  await new Promise(r=>setTimeout(r,400));
+  const loader=document.getElementById('loader');
+  loader.style.opacity='0';
+  setTimeout(()=>loader.style.display='none',650);
+  animate();
+}
+
+// ═══════════════════════════════════════════
+// BOOT
+// ═══════════════════════════════════════════
+initThree();
+loadData();
+</script>
+</body>
+</html>
