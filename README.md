@@ -32,4 +32,4 @@ A efficient, locally hosted map of the closest 1000 stars to the solar system wi
  
 ---
 
-Data is sourced from a snippet of the [HYG database](https://www.astronexus.com/projects/hyg) under a [CC BY-SA 4.0 license](https://creativecommons.org/licenses/by-sa/4.0/) 
+Data is sourced from a snippet of the [HYG database](https://www.astronexus.com/projects/hyg) under a [CC BY-SA 4.0 license](https://creativecommons.org/licenses/by-sa/4.0/) Snippet was changed from the original by only keeping the 1000 closest stars rather than the entire database.
